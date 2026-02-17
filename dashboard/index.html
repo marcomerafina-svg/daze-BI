@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daze BI — Charging Network</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<style>
+:root {
+  --bg-primary: #0A0A1A;
+  --bg-secondary: #12122A;
+  --bg-card: #1A1A3E;
+  --bg-card-hover: #222255;
+  --border: rgba(255,255,255,0.06);
+  --border-active: rgba(124,93,250,0.4);
+  --text-primary: #FFFFFF;
+  --text-secondary: #8B8BA7;
+  --text-muted: #5B5B7A;
+  --accent: #7C5DFA;
+  --accent-light: #9B7FFF;
+  --accent-glow: rgba(124,93,250,0.15);
+  --green: #33D69F;
+  --green-bg: rgba(51,214,159,0.08);
+  --orange: #FF8F00;
+  --orange-bg: rgba(255,143,0,0.08);
+  --blue: #00C2FF;
+  --blue-bg: rgba(0,194,255,0.08);
+  --pink: #FF6B9D;
+  --pink-bg: rgba(255,107,157,0.08);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  position: fixed;
+  left: 0; top: 0; bottom: 0;
+  width: 380px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.collapsed { transform: translateX(-380px); }
+
+.sidebar-toggle {
+  position: fixed;
+  left: 380px;
+  top: 20px;
+  z-index: 1001;
+  width: 36px; height: 36px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.3s;
+  font-size: 14px;
+}
+.sidebar-toggle:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+.sidebar.collapsed + .sidebar-toggle { left: 12px; }
+
+.sidebar-header {
+  padding: 28px 24px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.logo-icon {
+  width: 40px; height: 40px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.logo-text {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.logo-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* KPI Cards */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 20px 24px;
+}
+
+.kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  transition: all 0.2s;
+  cursor: default;
+}
+.kpi-card:hover {
+  border-color: var(--border-active);
+  background: var(--bg-card-hover);
+}
+
+.kpi-value {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -1px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.kpi-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.kpi-card.accent .kpi-value { color: var(--accent-light); }
+.kpi-card.green .kpi-value { color: var(--green); }
+.kpi-card.orange .kpi-value { color: var(--orange); }
+.kpi-card.blue .kpi-value { color: var(--blue); }
+
+/* Country List */
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  padding: 16px 24px 8px;
+}
+
+.country-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 24px 20px;
+}
+
+.country-list::-webkit-scrollbar { width: 4px; }
+.country-list::-webkit-scrollbar-track { background: transparent; }
+.country-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.country-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 2px;
+}
+.country-item:hover, .country-item.active {
+  background: var(--accent-glow);
+}
+.country-item.active {
+  border: 1px solid var(--border-active);
+}
+
+.country-name {
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.country-flag {
+  width: 24px; height: 16px;
+  border-radius: 3px;
+  object-fit: cover;
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.country-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-light);
+}
+
+.country-bar-wrapper {
+  flex: 1;
+  margin: 0 16px;
+}
+
+.country-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.country-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+  border-radius: 2px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Filter chips */
+.filters {
+  padding: 12px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.filter-chip:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+.filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* ===== MAP ===== */
+.map-container {
+  position: fixed;
+  left: 380px; top: 0; right: 0; bottom: 0;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar.collapsed ~ .map-container { left: 0; }
+
+#map {
+  width: 100%; height: 100%;
+  background: var(--bg-primary);
+}
+
+/* Dark map tiles */
+.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(1.2) saturate(0.3); }
+.leaflet-control-zoom { display: none; }
+
+/* Custom marker clusters */
+.marker-cluster-small, .marker-cluster-medium, .marker-cluster-large {
+  background: transparent !important;
+}
+.marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div {
+  background: rgba(124,93,250,0.85) !important;
+  color: white !important;
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  border: 2px solid rgba(155,127,255,0.5) !important;
+  box-shadow: 0 0 20px rgba(124,93,250,0.4) !important;
+}
+.marker-cluster-medium div {
+  background: rgba(124,93,250,0.9) !important;
+  font-size: 14px !important;
+}
+.marker-cluster-large div {
+  background: rgba(100,70,220,0.95) !important;
+  font-size: 15px !important;
+  box-shadow: 0 0 30px rgba(124,93,250,0.6) !important;
+}
+
+/* Custom circle markers */
+.city-dot {
+  transition: all 0.2s;
+}
+
+/* Popup */
+.leaflet-popup-content-wrapper {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: var(--shadow) !important;
+  color: var(--text-primary) !important;
+  font-family: 'Inter', sans-serif !important;
+}
+.leaflet-popup-tip { background: var(--bg-card) !important; }
+.leaflet-popup-close-button { color: var(--text-secondary) !important; }
+
+.popup-city {
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 2px;
+  letter-spacing: -0.3px;
+}
+.popup-country {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+.popup-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.popup-stat {
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.popup-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+.popup-stat-label {
+  font-size: 10px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.popup-stat.highlight .popup-stat-value { color: var(--accent-light); }
+.popup-stat.green .popup-stat-value { color: var(--green); }
+.popup-stat.blue .popup-stat-value { color: var(--blue); }
+.popup-stat.orange .popup-stat-value { color: var(--orange); }
+
+/* Bottom stats bar */
+.bottom-bar {
+  position: fixed;
+  left: 380px; right: 0; bottom: 0;
+  height: 80px;
+  background: linear-gradient(to top, var(--bg-secondary), transparent);
+  z-index: 900;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 30px 16px;
+  gap: 24px;
+  pointer-events: none;
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar.collapsed ~ .bottom-bar { left: 0; }
+
+.bottom-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.bottom-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+}
+
+.bottom-stat-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.bottom-stat-text strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Search */
+.search-wrapper {
+  padding: 12px 24px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 14px 10px 38px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--text-muted); }
+
+.search-icon {
+  position: absolute;
+  left: 38px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* Loading */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-primary);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.5s;
+}
+.loading-overlay.hidden { opacity: 0; pointer-events: none; }
+
+.loading-spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-text {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar { width: 100%; height: 50vh; top: auto; }
+  .sidebar-toggle { top: auto; bottom: calc(50vh + 12px); left: 12px; }
+  .map-container { left: 0; bottom: 50vh; }
+  .bottom-bar { left: 0; bottom: 50vh; }
+}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Caricamento dashboard...</div>
+</div>
+
+<!-- Sidebar -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">
+      <div class="logo-icon">D</div>
+      <div>
+        <div class="logo-text">Daze BI</div>
+        <div class="logo-subtitle">Charging Network Intelligence</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <div class="filters" id="filters"></div>
+
+  <div class="search-wrapper" style="position:relative;">
+    <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+    <input type="text" class="search-input" id="searchInput" placeholder="Cerca città o paese...">
+  </div>
+
+  <div class="section-title">Distribuzione per Paese</div>
+  <div class="country-list" id="countryList"></div>
+</div>
+
+<button class="sidebar-toggle" id="sidebarToggle">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 19l-7-7 7-7"/></svg>
+</button>
+
+<!-- Map -->
+<div class="map-container" id="mapContainer">
+  <div id="map"></div>
+</div>
+
+<!-- Bottom legend -->
+<div class="bottom-bar" id="bottomBar">
+  <div class="bottom-stat">
+    <div class="bottom-dot" style="background:var(--accent)"></div>
+    <div class="bottom-stat-text"><strong id="visibleCount">0</strong> reti visibili</div>
+  </div>
+  <div class="bottom-stat">
+    <div class="bottom-dot" style="background:var(--green)"></div>
+    <div class="bottom-stat-text"><strong id="pvCount">0</strong> con fotovoltaico</div>
+  </div>
+  <div class="bottom-stat">
+    <div class="bottom-dot" style="background:var(--blue)"></div>
+    <div class="bottom-stat-text"><strong id="tpCount">0</strong> trifase</div>
+  </div>
+</div>
+
+<script>
+// ===== DATA =====
+// Data format: [lat, lng, count, city, country, avg_power_kw, pv_count, tp_count, first_created, network_types]
+let RAW_DATA = [];
+let SUMMARY = {};
+let allMarkers = [];
+let map, markerCluster;
+let activeCountry = null;
+let activeFilter = null;
+
+// ===== INIT =====
+async function init() {
+  try {
+    const [geoRes, sumRes] = await Promise.all([
+      fetch('data/networks_compact.json'),
+      fetch('data/summary.json')
+    ]);
+    RAW_DATA = await geoRes.json();
+    SUMMARY = await sumRes.json();
+  } catch(e) {
+    // Fallback: try loading full geocoded data
+    try {
+      const res = await fetch('data/networks_geocoded.json');
+      const full = await res.json();
+      RAW_DATA = full.map(c => [
+        c.lat, c.lng, c.count, c.city, c.country,
+        c.avg_power_kw || 0, c.photovoltaic_count || 0,
+        c.three_phase_count || 0, c.first_created || '',
+        c.network_types || {}
+      ]);
+      const sumRes2 = await fetch('data/summary.json');
+      SUMMARY = await sumRes2.json();
+    } catch(e2) {
+      console.error('Failed to load data:', e2);
+    }
+  }
+
+  initMap();
+  renderKPIs();
+  renderCountryList();
+  renderFilters();
+  renderMarkers();
+  setupSearch();
+  setupSidebar();
+
+  setTimeout(() => document.getElementById('loading').classList.add('hidden'), 600);
+}
+
+// ===== MAP =====
+function initMap() {
+  map = L.map('map', {
+    center: [44.5, 11.0],
+    zoom: 6,
+    zoomControl: false,
+    attributionControl: false,
+    maxBounds: [[-60, -180], [80, 180]],
+    minZoom: 3
+  });
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    maxZoom: 19,
+    subdomains: 'abcd'
+  }).addTo(map);
+
+  L.control.zoom({ position: 'topright' }).addTo(map);
+
+  markerCluster = L.markerClusterGroup({
+    maxClusterRadius: 50,
+    spiderfyOnMaxZoom: true,
+    showCoverageOnHover: false,
+    zoomToBoundsOnClick: true,
+    iconCreateFunction: function(cluster) {
+      const count = cluster.getAllChildMarkers().reduce((s, m) => s + (m.options.networkCount || 1), 0);
+      let size = 'small', dim = 40;
+      if (count > 100) { size = 'large'; dim = 56; }
+      else if (count > 30) { size = 'medium'; dim = 48; }
+      return L.divIcon({
+        html: `<div>${formatNum(count)}</div>`,
+        className: `marker-cluster marker-cluster-${size}`,
+        iconSize: L.point(dim, dim)
+      });
+    }
+  });
+
+  map.addLayer(markerCluster);
+}
+
+function renderMarkers() {
+  markerCluster.clearLayers();
+  allMarkers = [];
+  let visibleNetworks = 0;
+  let visiblePV = 0;
+  let visibleTP = 0;
+
+  RAW_DATA.forEach(d => {
+    const [lat, lng, count, city, country, avgPower, pvCount, tpCount, firstCreated, networkTypes] = d;
+
+    // Apply filters
+    if (activeCountry && country !== activeCountry) return;
+    if (activeFilter === 'pv' && pvCount === 0) return;
+    if (activeFilter === 'three_phase' && tpCount === 0) return;
+
+    visibleNetworks += count;
+    visiblePV += pvCount;
+    visibleTP += tpCount;
+
+    const radius = Math.max(4, Math.min(30, Math.sqrt(count) * 2.5));
+    const opacity = Math.max(0.5, Math.min(0.9, 0.4 + count / 500));
+
+    let fillColor = '#7C5DFA';
+    if (activeFilter === 'pv') fillColor = '#33D69F';
+    else if (activeFilter === 'three_phase') fillColor = '#00C2FF';
+
+    const marker = L.circleMarker([lat, lng], {
+      radius: radius,
+      fillColor: fillColor,
+      fillOpacity: opacity,
+      color: 'rgba(155,127,255,0.3)',
+      weight: 1,
+      networkCount: count,
+      className: 'city-dot'
+    });
+
+    const typeLabels = { '0': 'Tipo 0', '1': 'Tipo 1', '2': 'Tipo 2', '3': 'Tipo 3', '4': 'Tipo 4', '5': 'Tipo 5' };
+    const typesHtml = Object.entries(networkTypes || {})
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v]) => `<span style="color:var(--text-muted)">${typeLabels[k] || k}:</span> ${v}`)
+      .join(' &middot; ');
+
+    marker.bindPopup(`
+      <div style="min-width:220px">
+        <div class="popup-city">${city}</div>
+        <div class="popup-country">${country}${firstCreated ? ' &middot; dal ' + firstCreated : ''}</div>
+        <div class="popup-stats">
+          <div class="popup-stat highlight">
+            <div class="popup-stat-value">${formatNum(count)}</div>
+            <div class="popup-stat-label">Reti</div>
+          </div>
+          <div class="popup-stat orange">
+            <div class="popup-stat-value">${avgPower.toFixed(1)}</div>
+            <div class="popup-stat-label">kW medio</div>
+          </div>
+          <div class="popup-stat green">
+            <div class="popup-stat-value">${pvCount}</div>
+            <div class="popup-stat-label">Fotovoltaico</div>
+          </div>
+          <div class="popup-stat blue">
+            <div class="popup-stat-value">${tpCount}</div>
+            <div class="popup-stat-label">Trifase</div>
+          </div>
+        </div>
+        ${typesHtml ? `<div style="margin-top:10px;font-size:11px;color:var(--text-secondary)">${typesHtml}</div>` : ''}
+      </div>
+    `, { maxWidth: 300 });
+
+    allMarkers.push(marker);
+    markerCluster.addLayer(marker);
+  });
+
+  document.getElementById('visibleCount').textContent = formatNum(visibleNetworks);
+  document.getElementById('pvCount').textContent = formatNum(visiblePV);
+  document.getElementById('tpCount').textContent = formatNum(visibleTP);
+}
+
+// ===== KPIs =====
+function renderKPIs() {
+  const grid = document.getElementById('kpiGrid');
+  const countryCount = Object.keys(SUMMARY.countries || {}).length;
+  const kpis = [
+    { value: formatNum(SUMMARY.total_networks), label: 'Reti attive', cls: 'accent' },
+    { value: formatNum(SUMMARY.total_cities), label: 'Città', cls: 'blue' },
+    { value: formatNum(SUMMARY.photovoltaic_total), label: 'Fotovoltaico', cls: 'green' },
+    { value: countryCount, label: 'Paesi', cls: 'orange' },
+  ];
+  grid.innerHTML = kpis.map(k => `
+    <div class="kpi-card ${k.cls}">
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>
+  `).join('');
+}
+
+// ===== COUNTRY LIST =====
+function renderCountryList(filter) {
+  const list = document.getElementById('countryList');
+  const countries = Object.entries(SUMMARY.countries || {})
+    .sort((a, b) => b[1] - a[1]);
+  const maxCount = countries[0] ? countries[0][1] : 1;
+
+  const filtered = filter
+    ? countries.filter(([name]) => name.toLowerCase().includes(filter.toLowerCase()))
+    : countries;
+
+  list.innerHTML = filtered.map(([name, count]) => `
+    <div class="country-item ${activeCountry === name ? 'active' : ''}" data-country="${name}">
+      <div class="country-name">
+        <span class="country-flag">${countryFlag(name)}</span>
+        ${name || '(vuoto)'}
+      </div>
+      <div class="country-bar-wrapper">
+        <div class="country-bar">
+          <div class="country-bar-fill" style="width:${(count / maxCount * 100).toFixed(1)}%"></div>
+        </div>
+      </div>
+      <div class="country-count">${formatNum(count)}</div>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.country-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const country = el.dataset.country;
+      if (activeCountry === country) {
+        activeCountry = null;
+        map.setView([44.5, 11.0], 6);
+      } else {
+        activeCountry = country;
+        // Zoom to country
+        const countryBounds = getCountryBounds(country);
+        if (countryBounds) map.fitBounds(countryBounds, { padding: [50, 50] });
+      }
+      renderCountryList(document.getElementById('searchInput').value);
+      renderMarkers();
+    });
+  });
+}
+
+// ===== FILTERS =====
+function renderFilters() {
+  const container = document.getElementById('filters');
+  const filters = [
+    { id: null, label: 'Tutte' },
+    { id: 'pv', label: `Fotovoltaico (${formatNum(SUMMARY.photovoltaic_total)})` },
+    { id: 'three_phase', label: `Trifase (${formatNum(SUMMARY.three_phase_total)})` },
+  ];
+  container.innerHTML = filters.map(f => `
+    <button class="filter-chip ${activeFilter === f.id ? 'active' : ''}" data-filter="${f.id}">${f.label}</button>
+  `).join('');
+
+  container.querySelectorAll('.filter-chip').forEach(el => {
+    el.addEventListener('click', () => {
+      const fid = el.dataset.filter === 'null' ? null : el.dataset.filter;
+      activeFilter = fid;
+      renderFilters();
+      renderMarkers();
+    });
+  });
+}
+
+// ===== SEARCH =====
+function setupSearch() {
+  const input = document.getElementById('searchInput');
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    renderCountryList(q);
+    if (q.length >= 2) {
+      // Also search cities
+      const match = RAW_DATA.find(d => d[3].toLowerCase().includes(q.toLowerCase()));
+      if (match) {
+        map.setView([match[0], match[1]], 12);
+      }
+    }
+  });
+}
+
+// ===== SIDEBAR TOGGLE =====
+function setupSidebar() {
+  const toggle = document.getElementById('sidebarToggle');
+  const sidebar = document.getElementById('sidebar');
+  toggle.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    setTimeout(() => map.invalidateSize(), 350);
+  });
+}
+
+// ===== UTILS =====
+function formatNum(n) {
+  if (n >= 1000) return (n / 1000).toFixed(1).replace('.0', '') + 'k';
+  return String(n);
+}
+
+function countryFlag(country) {
+  const flags = {
+    'Italy': '🇮🇹', 'Spain': '🇪🇸', 'France': '🇫🇷', 'Portugal': '🇵🇹',
+    'Switzerland': '🇨🇭', 'Greece': '🇬🇷', 'Poland': '🇵🇱', 'Slovenia': '🇸🇮',
+    'Hungary': '🇭🇺', 'Czechia': '🇨🇿', 'Belgium': '🇧🇪', 'Germany': '🇩🇪',
+    'Morocco': '🇲🇦', 'Afghanistan': '🇦🇫', 'Tunisia': '🇹🇳', 'Costa Rica': '🇨🇷',
+    'Austria': '🇦🇹', 'Sweden': '🇸🇪', 'San Marino': '🇸🇲', 'Bulgaria': '🇧🇬',
+    'Slovakia': '🇸🇰', 'Romania': '🇷🇴', 'Finland': '🇫🇮', 'Denmark': '🇩🇰',
+    'Moldova': '🇲🇩', 'Lithuania': '🇱🇹', 'Cyprus': '🇨🇾', 'Croatia': '🇭🇷',
+    'Netherlands': '🇳🇱', 'United Arab Emirates': '🇦🇪', 'United Kingdom': '🇬🇧',
+    'Luxembourg': '🇱🇺', 'Ukraine': '🇺🇦', 'Turkey': '🇹🇷', 'Albania': '🇦🇱',
+    'Serbia': '🇷🇸', 'Ivory Coast': '🇨🇮', 'Ecuador': '🇪🇨', 'Venezuela': '🇻🇪',
+    'Monaco': '🇲🇨', 'Angola': '🇦🇴',
+  };
+  return flags[country] || '🌍';
+}
+
+function getCountryBounds(country) {
+  const bounds = {
+    'Italy': [[35.5, 6.6], [47.1, 18.5]],
+    'Spain': [[36.0, -9.3], [43.8, 4.3]],
+    'France': [[41.3, -5.1], [51.1, 9.6]],
+    'Portugal': [[36.9, -9.5], [42.2, -6.2]],
+    'Switzerland': [[45.8, 5.9], [47.8, 10.5]],
+    'Greece': [[34.8, 19.4], [41.8, 29.6]],
+    'Poland': [[49.0, 14.1], [54.8, 24.1]],
+    'Slovenia': [[45.4, 13.4], [46.9, 16.6]],
+    'Hungary': [[45.7, 16.1], [48.6, 22.9]],
+    'Czechia': [[48.6, 12.1], [51.1, 18.9]],
+    'Belgium': [[49.5, 2.5], [51.5, 6.4]],
+    'Germany': [[47.3, 5.9], [55.1, 15.0]],
+  };
+  return bounds[country] || null;
+}
+
+// ===== START =====
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>

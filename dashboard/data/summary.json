@@ -1,0 +1,85 @@
+{
+  "total_networks": 17393,
+  "total_cities": 5726,
+  "countries": {
+    "Italy": 12525,
+    "Spain": 2617,
+    "France": 1010,
+    "Portugal": 455,
+    "Switzerland": 316,
+    "Greece": 149,
+    "Slovenia": 63,
+    "Poland": 43,
+    "Hungary": 32,
+    "Czechia": 31,
+    "Belgium": 24,
+    "Germany": 14,
+    "Morocco": 13,
+    "Afghanistan": 13,
+    "Tunisia": 12,
+    "Costa Rica": 9,
+    "Austria": 9,
+    "Sweden": 6,
+    "San Marino": 5,
+    "Bulgaria": 5,
+    "Slovakia": 4,
+    "Romania": 4,
+    "Finland": 4,
+    "Denmark": 3,
+    "Moldova": 3,
+    "Lithuania": 3,
+    "Cyprus": 3,
+    "Croatia": 3,
+    "Ivory Coast": 2,
+    "Netherlands": 2,
+    "United Arab Emirates": 2,
+    "Anguilla": 1,
+    "Guadeloupe": 1,
+    "United Kingdom": 1,
+    "Venezuela": 1,
+    "Luxembourg": 1,
+    "Ukraine": 1,
+    "Martinique": 1,
+    "Ecuador": 1,
+    "Turkey": 1
+  },
+  "network_types": {
+    "0": 4228,
+    "1": 4502,
+    "2": 206,
+    "3": 8426,
+    "4": 29,
+    "5": 2
+  },
+  "photovoltaic_total": 7225,
+  "three_phase_total": 5108,
+  "monthly_growth": [
+    {
+      "month": "2025-10",
+      "count": 14122
+    },
+    {
+      "month": "2025-11",
+      "count": 1014
+    },
+    {
+      "month": "2025-12",
+      "count": 866
+    },
+    {
+      "month": "2026-01",
+      "count": 834
+    },
+    {
+      "month": "2026-02",
+      "count": 557
+    }
+  ],
+  "power_distribution": {
+    "0-3000": 1985,
+    "3001-6000": 8146,
+    "6001-10000": 2937,
+    "10001-20000": 2017,
+    "20001+": 2308
+  }
+}
