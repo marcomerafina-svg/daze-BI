@@ -6,10 +6,9 @@
 <title>Daze BI — Charging Network</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <style>
 :root {
   --bg-primary: #0A0A1A;
@@ -542,6 +541,8 @@ body {
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
 // ===== DATA =====
 // Data format: [lat, lng, count, city, country, avg_power_kw, pv_count, tp_count, first_created, network_types]
@@ -859,6 +860,13 @@ function getCountryBounds(country) {
 
 // ===== START =====
 document.addEventListener('DOMContentLoaded', init);
+
+window.onerror = function(msg, url, line) {
+  var el = document.getElementById('loading');
+  if (el) el.innerHTML = '<div style="color:#FF6B9D;font-size:14px;text-align:center;padding:20px">' +
+    '<div style="font-size:24px;margin-bottom:12px">Errore</div>' +
+    '<div>' + msg + '</div><div style="color:#5B5B7A;margin-top:8px">Riga ' + line + '</div></div>';
+};
 </script>
 </body>
 </html>
