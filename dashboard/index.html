@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Daze BI — Charging Network</title>
+<title>Daze BI — Charging Network & Chargers</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css" />
@@ -446,6 +446,63 @@ body {
   pointer-events: none;
 }
 
+/* View Toggle */
+.view-toggle {
+  display: flex;
+  gap: 4px;
+  padding: 12px 24px 4px;
+}
+
+.view-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: 'Inter', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.view-btn:hover { border-color: var(--text-secondary); color: var(--text-primary); }
+.view-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+/* Group legend in popup */
+.popup-groups {
+  margin-top: 10px;
+}
+.popup-group-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 12px;
+}
+.popup-group-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+}
+.popup-group-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.popup-group-count {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
 /* Loading */
 .loading-overlay {
   position: fixed;
@@ -503,6 +560,11 @@ body {
     </div>
   </div>
 
+  <div class="view-toggle" id="viewToggle">
+    <button class="view-btn active" data-view="networks">Reti</button>
+    <button class="view-btn" data-view="chargers">Chargers</button>
+  </div>
+
   <div class="kpi-grid" id="kpiGrid"></div>
 
   <div class="filters" id="filters"></div>
@@ -545,38 +607,62 @@ body {
 <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script>
 // ===== DATA =====
-// Data format: [lat, lng, count, city, country, avg_power_kw, pv_count, tp_count, first_created, network_types]
-let RAW_DATA = [];
-let SUMMARY = {};
+// Networks format: [lat, lng, count, city, country, avg_power_kw, pv_count, tp_count, first_created, network_types]
+// Chargers format: [lat, lng, total_chargers, city, country, {group: count}]
+let NET_DATA = [];
+let NET_SUMMARY = {};
+let CHG_DATA = [];
+let CHG_SUMMARY = {};
 let allMarkers = [];
 let map, markerCluster;
 let activeCountry = null;
 let activeFilter = null;
+let currentView = 'networks'; // 'networks' or 'chargers'
+
+const GROUP_COLORS = {
+  'Dazebox Home': '#7C5DFA',
+  'Dazebox C': '#33D69F',
+  'Dazebox Share': '#00C2FF',
+  'Dazebox Pro': '#FF8F00',
+  'Duo': '#FF6B9D',
+  'Duo Pro': '#FF9ED3',
+  'Urban': '#FFCA28',
+  'Urban Pro': '#FFE082',
+  'Stilo': '#80DEEA',
+  'Stilo Pro': '#4DD0E1',
+  'Dazebox': '#CE93D8',
+  'Altro': '#78909C',
+};
 
 // ===== INIT =====
 async function init() {
   try {
-    const [geoRes, sumRes] = await Promise.all([
+    const [netRes, netSumRes, chgRes, chgSumRes] = await Promise.all([
       fetch('data/networks_compact.json'),
-      fetch('data/summary.json')
+      fetch('data/summary.json'),
+      fetch('data/chargers_compact.json'),
+      fetch('data/chargers_summary.json')
     ]);
-    RAW_DATA = await geoRes.json();
-    SUMMARY = await sumRes.json();
+    NET_DATA = await netRes.json();
+    NET_SUMMARY = await netSumRes.json();
+    CHG_DATA = await chgRes.json();
+    CHG_SUMMARY = await chgSumRes.json();
   } catch(e) {
-    // Fallback: try loading full geocoded data
+    console.error('Failed to load data:', e);
+    // Fallback for networks only
     try {
       const res = await fetch('data/networks_geocoded.json');
       const full = await res.json();
-      RAW_DATA = full.map(c => [
+      NET_DATA = full.map(c => [
         c.lat, c.lng, c.count, c.city, c.country,
         c.avg_power_kw || 0, c.photovoltaic_count || 0,
         c.three_phase_count || 0, c.first_created || '',
         c.network_types || {}
       ]);
       const sumRes2 = await fetch('data/summary.json');
-      SUMMARY = await sumRes2.json();
+      NET_SUMMARY = await sumRes2.json();
     } catch(e2) {
-      console.error('Failed to load data:', e2);
+      console.error('Failed to load fallback data:', e2);
     }
   }
 
@@ -587,6 +673,7 @@ async function init() {
   renderMarkers();
   setupSearch();
   setupSidebar();
+  setupViewToggle();
 
   setTimeout(() => document.getElementById('loading').classList.add('hidden'), 600);
 }
@@ -633,14 +720,22 @@ function initMap() {
 function renderMarkers() {
   markerCluster.clearLayers();
   allMarkers = [];
+
+  if (currentView === 'networks') {
+    renderNetworkMarkers();
+  } else {
+    renderChargerMarkers();
+  }
+}
+
+function renderNetworkMarkers() {
   let visibleNetworks = 0;
   let visiblePV = 0;
   let visibleTP = 0;
 
-  RAW_DATA.forEach(d => {
+  NET_DATA.forEach(d => {
     const [lat, lng, count, city, country, avgPower, pvCount, tpCount, firstCreated, networkTypes] = d;
 
-    // Apply filters
     if (activeCountry && country !== activeCountry) return;
     if (activeFilter === 'pv' && pvCount === 0) return;
     if (activeFilter === 'three_phase' && tpCount === 0) return;
@@ -657,13 +752,9 @@ function renderMarkers() {
     else if (activeFilter === 'three_phase') fillColor = '#00C2FF';
 
     const marker = L.circleMarker([lat, lng], {
-      radius: radius,
-      fillColor: fillColor,
-      fillOpacity: opacity,
-      color: 'rgba(155,127,255,0.3)',
-      weight: 1,
-      networkCount: count,
-      className: 'city-dot'
+      radius, fillColor, fillOpacity: opacity,
+      color: 'rgba(155,127,255,0.3)', weight: 1,
+      networkCount: count, className: 'city-dot'
     });
 
     const typeLabels = { '0': 'Tipo 0', '1': 'Tipo 1', '2': 'Tipo 2', '3': 'Tipo 3', '4': 'Tipo 4', '5': 'Tipo 5' };
@@ -683,7 +774,7 @@ function renderMarkers() {
           </div>
           <div class="popup-stat orange">
             <div class="popup-stat-value">${avgPower.toFixed(1)}</div>
-            <div class="popup-stat-label">kW medio</div>
+            <div class="popup-stat-label">kW fornitura</div>
           </div>
           <div class="popup-stat green">
             <div class="popup-stat-value">${pvCount}</div>
@@ -707,16 +798,98 @@ function renderMarkers() {
   document.getElementById('tpCount').textContent = formatNum(visibleTP);
 }
 
+function renderChargerMarkers() {
+  let visibleChargers = 0;
+  let visibleGroups = {};
+
+  CHG_DATA.forEach(d => {
+    const [lat, lng, total, city, country, groups] = d;
+
+    if (activeCountry && country !== activeCountry) return;
+    // Filter by product group
+    if (activeFilter && !groups[activeFilter]) return;
+
+    const displayCount = activeFilter ? (groups[activeFilter] || 0) : total;
+    visibleChargers += displayCount;
+
+    // Accumulate group totals for bottom bar
+    Object.entries(groups).forEach(([g, c]) => {
+      visibleGroups[g] = (visibleGroups[g] || 0) + c;
+    });
+
+    const radius = Math.max(4, Math.min(30, Math.sqrt(displayCount) * 2.5));
+    const opacity = Math.max(0.5, Math.min(0.9, 0.4 + displayCount / 300));
+
+    let fillColor = activeFilter ? (GROUP_COLORS[activeFilter] || '#7C5DFA') : '#7C5DFA';
+
+    const marker = L.circleMarker([lat, lng], {
+      radius, fillColor, fillOpacity: opacity,
+      color: 'rgba(155,127,255,0.3)', weight: 1,
+      networkCount: displayCount, className: 'city-dot'
+    });
+
+    // Build groups breakdown HTML
+    const groupsHtml = Object.entries(groups)
+      .sort((a, b) => b[1] - a[1])
+      .map(([g, c]) => `
+        <div class="popup-group-row">
+          <div class="popup-group-name">
+            <div class="popup-group-dot" style="background:${GROUP_COLORS[g] || '#78909C'}"></div>
+            ${g}
+          </div>
+          <div class="popup-group-count">${c}</div>
+        </div>
+      `).join('');
+
+    marker.bindPopup(`
+      <div style="min-width:220px">
+        <div class="popup-city">${city}</div>
+        <div class="popup-country">${country}</div>
+        <div class="popup-stats" style="grid-template-columns:1fr">
+          <div class="popup-stat highlight">
+            <div class="popup-stat-value">${formatNum(total)}</div>
+            <div class="popup-stat-label">Chargers totali</div>
+          </div>
+        </div>
+        <div class="popup-groups">${groupsHtml}</div>
+      </div>
+    `, { maxWidth: 300 });
+
+    allMarkers.push(marker);
+    markerCluster.addLayer(marker);
+  });
+
+  // Update bottom bar for charger view
+  const topGroups = Object.entries(visibleGroups).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  document.getElementById('visibleCount').textContent = formatNum(visibleChargers);
+  document.getElementById('pvCount').textContent = topGroups[0] ? formatNum(topGroups[0][1]) : '0';
+  document.getElementById('tpCount').textContent = topGroups[1] ? formatNum(topGroups[1][1]) : '0';
+}
+
 // ===== KPIs =====
 function renderKPIs() {
   const grid = document.getElementById('kpiGrid');
-  const countryCount = Object.keys(SUMMARY.countries || {}).length;
-  const kpis = [
-    { value: formatNum(SUMMARY.total_networks), label: 'Reti attive', cls: 'accent' },
-    { value: formatNum(SUMMARY.total_cities), label: 'Città', cls: 'blue' },
-    { value: formatNum(SUMMARY.photovoltaic_total), label: 'Fotovoltaico', cls: 'green' },
-    { value: countryCount, label: 'Paesi', cls: 'orange' },
-  ];
+  let kpis;
+
+  if (currentView === 'networks') {
+    const countryCount = Object.keys(NET_SUMMARY.countries || {}).length;
+    kpis = [
+      { value: formatNum(NET_SUMMARY.total_networks), label: 'Reti attive', cls: 'accent' },
+      { value: formatNum(NET_SUMMARY.total_cities), label: 'Città', cls: 'blue' },
+      { value: formatNum(NET_SUMMARY.photovoltaic_total), label: 'Fotovoltaico', cls: 'green' },
+      { value: countryCount, label: 'Paesi', cls: 'orange' },
+    ];
+  } else {
+    const countryCount = Object.keys(CHG_SUMMARY.countries || {}).length;
+    const topGroup = Object.entries(CHG_SUMMARY.groups || {})[0];
+    kpis = [
+      { value: formatNum(CHG_SUMMARY.total_chargers), label: 'Chargers totali', cls: 'accent' },
+      { value: formatNum(CHG_SUMMARY.total_cities), label: 'Città', cls: 'blue' },
+      { value: Object.keys(CHG_SUMMARY.groups || {}).length, label: 'Gruppi prodotto', cls: 'green' },
+      { value: countryCount, label: 'Paesi', cls: 'orange' },
+    ];
+  }
+
   grid.innerHTML = kpis.map(k => `
     <div class="kpi-card ${k.cls}">
       <div class="kpi-value">${k.value}</div>
@@ -728,7 +901,8 @@ function renderKPIs() {
 // ===== COUNTRY LIST =====
 function renderCountryList(filter) {
   const list = document.getElementById('countryList');
-  const countries = Object.entries(SUMMARY.countries || {})
+  const summary = currentView === 'networks' ? NET_SUMMARY : CHG_SUMMARY;
+  const countries = Object.entries(summary.countries || {})
     .sort((a, b) => b[1] - a[1]);
   const maxCount = countries[0] ? countries[0][1] : 1;
 
@@ -772,11 +946,21 @@ function renderCountryList(filter) {
 // ===== FILTERS =====
 function renderFilters() {
   const container = document.getElementById('filters');
-  const filters = [
-    { id: null, label: 'Tutte' },
-    { id: 'pv', label: `Fotovoltaico (${formatNum(SUMMARY.photovoltaic_total)})` },
-    { id: 'three_phase', label: `Trifase (${formatNum(SUMMARY.three_phase_total)})` },
-  ];
+  let filters;
+
+  if (currentView === 'networks') {
+    filters = [
+      { id: null, label: 'Tutte' },
+      { id: 'pv', label: `Fotovoltaico (${formatNum(NET_SUMMARY.photovoltaic_total)})` },
+      { id: 'three_phase', label: `Trifase (${formatNum(NET_SUMMARY.three_phase_total)})` },
+    ];
+  } else {
+    filters = [{ id: null, label: 'Tutti' }];
+    Object.entries(CHG_SUMMARY.groups || {}).forEach(([g, c]) => {
+      filters.push({ id: g, label: `${g} (${formatNum(c)})` });
+    });
+  }
+
   container.innerHTML = filters.map(f => `
     <button class="filter-chip ${activeFilter === f.id ? 'active' : ''}" data-filter="${f.id}">${f.label}</button>
   `).join('');
@@ -798,8 +982,8 @@ function setupSearch() {
     const q = input.value.trim();
     renderCountryList(q);
     if (q.length >= 2) {
-      // Also search cities
-      const match = RAW_DATA.find(d => d[3].toLowerCase().includes(q.toLowerCase()));
+      const data = currentView === 'networks' ? NET_DATA : CHG_DATA;
+      const match = data.find(d => d[3].toLowerCase().includes(q.toLowerCase()));
       if (match) {
         map.setView([match[0], match[1]], 12);
       }
@@ -815,6 +999,72 @@ function setupSidebar() {
     sidebar.classList.toggle('collapsed');
     setTimeout(() => map.invalidateSize(), 350);
   });
+}
+
+// ===== VIEW TOGGLE =====
+function setupViewToggle() {
+  document.getElementById('viewToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('.view-btn');
+    if (!btn) return;
+    const view = btn.dataset.view;
+    if (view === currentView) return;
+
+    currentView = view;
+    activeFilter = null;
+    activeCountry = null;
+
+    // Update toggle buttons
+    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Update bottom bar labels
+    updateBottomBar();
+
+    // Re-render everything
+    renderKPIs();
+    renderCountryList();
+    renderFilters();
+    renderMarkers();
+
+    map.setView([44.5, 11.0], 6);
+  });
+}
+
+function updateBottomBar() {
+  const bar = document.getElementById('bottomBar');
+  if (currentView === 'networks') {
+    bar.innerHTML = `
+      <div class="bottom-stat">
+        <div class="bottom-dot" style="background:var(--accent)"></div>
+        <div class="bottom-stat-text"><strong id="visibleCount">0</strong> reti visibili</div>
+      </div>
+      <div class="bottom-stat">
+        <div class="bottom-dot" style="background:var(--green)"></div>
+        <div class="bottom-stat-text"><strong id="pvCount">0</strong> con fotovoltaico</div>
+      </div>
+      <div class="bottom-stat">
+        <div class="bottom-dot" style="background:var(--blue)"></div>
+        <div class="bottom-stat-text"><strong id="tpCount">0</strong> trifase</div>
+      </div>
+    `;
+  } else {
+    const groups = Object.entries(CHG_SUMMARY.groups || {}).sort((a, b) => b[1] - a[1]);
+    const top3 = groups.slice(0, 3);
+    bar.innerHTML = `
+      <div class="bottom-stat">
+        <div class="bottom-dot" style="background:var(--accent)"></div>
+        <div class="bottom-stat-text"><strong id="visibleCount">0</strong> chargers visibili</div>
+      </div>
+      <div class="bottom-stat">
+        <div class="bottom-dot" style="background:${GROUP_COLORS[top3[0]?.[0]] || 'var(--green)'}"></div>
+        <div class="bottom-stat-text"><strong id="pvCount">0</strong> ${top3[0]?.[0] || ''}</div>
+      </div>
+      <div class="bottom-stat">
+        <div class="bottom-dot" style="background:${GROUP_COLORS[top3[1]?.[0]] || 'var(--blue)'}"></div>
+        <div class="bottom-stat-text"><strong id="tpCount">0</strong> ${top3[1]?.[0] || ''}</div>
+      </div>
+    `;
+  }
 }
 
 // ===== UTILS =====

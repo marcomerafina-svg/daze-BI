@@ -7,12 +7,18 @@ DATA_DIR = "/home/user/daze-BI/dashboard/data"
 TEMPLATE = "/home/user/daze-BI/dashboard/index.html"
 OUTPUT = "/home/user/daze-BI/dashboard/daze-dashboard.html"
 
-# Load data
+# Load all data
 with open(os.path.join(DATA_DIR, "networks_compact.json")) as f:
-    compact = json.dumps(json.load(f), separators=(',', ':'))
+    net_compact = json.dumps(json.load(f), separators=(',', ':'))
 
 with open(os.path.join(DATA_DIR, "summary.json")) as f:
-    summary = json.dumps(json.load(f), separators=(',', ':'))
+    net_summary = json.dumps(json.load(f), separators=(',', ':'))
+
+with open(os.path.join(DATA_DIR, "chargers_compact.json")) as f:
+    chg_compact = json.dumps(json.load(f), separators=(',', ':'))
+
+with open(os.path.join(DATA_DIR, "chargers_summary.json")) as f:
+    chg_summary = json.dumps(json.load(f), separators=(',', ':'))
 
 # Read template
 with open(TEMPLATE) as f:
@@ -21,27 +27,32 @@ with open(TEMPLATE) as f:
 # Replace the fetch-based init with embedded data
 old_init = """async function init() {
   try {
-    const [geoRes, sumRes] = await Promise.all([
+    const [netRes, netSumRes, chgRes, chgSumRes] = await Promise.all([
       fetch('data/networks_compact.json'),
-      fetch('data/summary.json')
+      fetch('data/summary.json'),
+      fetch('data/chargers_compact.json'),
+      fetch('data/chargers_summary.json')
     ]);
-    RAW_DATA = await geoRes.json();
-    SUMMARY = await sumRes.json();
+    NET_DATA = await netRes.json();
+    NET_SUMMARY = await netSumRes.json();
+    CHG_DATA = await chgRes.json();
+    CHG_SUMMARY = await chgSumRes.json();
   } catch(e) {
-    // Fallback: try loading full geocoded data
+    console.error('Failed to load data:', e);
+    // Fallback for networks only
     try {
       const res = await fetch('data/networks_geocoded.json');
       const full = await res.json();
-      RAW_DATA = full.map(c => [
+      NET_DATA = full.map(c => [
         c.lat, c.lng, c.count, c.city, c.country,
         c.avg_power_kw || 0, c.photovoltaic_count || 0,
         c.three_phase_count || 0, c.first_created || '',
         c.network_types || {}
       ]);
       const sumRes2 = await fetch('data/summary.json');
-      SUMMARY = await sumRes2.json();
+      NET_SUMMARY = await sumRes2.json();
     } catch(e2) {
-      console.error('Failed to load data:', e2);
+      console.error('Failed to load fallback data:', e2);
     }
   }
 
@@ -52,14 +63,17 @@ old_init = """async function init() {
   renderMarkers();
   setupSearch();
   setupSidebar();
+  setupViewToggle();
 
   setTimeout(() => document.getElementById('loading').classList.add('hidden'), 600);
 }"""
 
 new_init = f"""async function init() {{
   // Data embedded directly - no server needed
-  RAW_DATA = {compact};
-  SUMMARY = {summary};
+  NET_DATA = {net_compact};
+  NET_SUMMARY = {net_summary};
+  CHG_DATA = {chg_compact};
+  CHG_SUMMARY = {chg_summary};
 
   initMap();
   renderKPIs();
@@ -68,6 +82,7 @@ new_init = f"""async function init() {{
   renderMarkers();
   setupSearch();
   setupSidebar();
+  setupViewToggle();
 
   setTimeout(() => document.getElementById('loading').classList.add('hidden'), 600);
 }}"""
